@@ -15,11 +15,11 @@ from ragdrag import __version__
 
 
 BANNER = click.style(
-    "    ┌──────────────────────────────┐\n"
-    f"    │  RAGdrag v{__version__:<19s}│\n"
-    "    │  RAG Pipeline Security Toolkit│\n"
-    "    │  github.com/McKern3l          │\n"
-    "    └──────────────────────────────┘\n",
+    "    ┌──────────────────────────────────┐\n"
+    f"    │  RAGdrag v{__version__:<23s}│\n"
+    "    │  RAG Pipeline Security Toolkit   │\n"
+    "    │  github.com/McKern3l             │\n"
+    "    └──────────────────────────────────┘\n",
     fg="cyan",
 )
 
