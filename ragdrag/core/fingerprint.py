@@ -20,20 +20,14 @@ from dataclasses import dataclass, field
 
 import httpx
 
+from ragdrag.core.models import Finding
 from ragdrag.utils.timing import TimingResult, TimingStats, measure_elapsed
 
 
 # --- Data structures ---
 
-@dataclass
-class Finding:
-    """A single fingerprint finding."""
-
-    technique_id: str
-    technique_name: str
-    confidence: str  # "high", "medium", "low"
-    detail: str
-    evidence: dict = field(default_factory=dict)
+# Re-export Finding so existing imports from ragdrag.core.fingerprint still work
+__all__ = ["Finding", "FingerprintResult"]
 
 
 @dataclass

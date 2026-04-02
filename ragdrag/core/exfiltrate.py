@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from ragdrag.core.fingerprint import Finding
+from ragdrag.core.models import Finding
 
 
 # --- Data structures ---

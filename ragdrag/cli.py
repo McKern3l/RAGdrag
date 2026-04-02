@@ -109,14 +109,59 @@ def fingerprint(
 @cli.command()
 @click.option("--target", "-t", required=True, help="Target RAG endpoint URL.")
 @click.option("--depth", type=click.Choice(["quick", "full"]), default="quick",
-              help="Probe depth.")
-def probe(target: str, depth: str) -> None:
-    """R2: Probe RAG pipeline internals (chunk sizing, thresholds, scope).
+              help="Probe depth: quick (RD-0201) or full (all R2 techniques).")
+@click.option("--query-field", default="query", help="JSON field name for queries.")
+@click.option("--response-field", default=None, help="JSON field to read responses from.")
+@click.option("--output", "-o", default=None, help="Output file path for JSON report.")
+@click.option("--timeout", default=30.0, help="HTTP request timeout in seconds.")
+@click.option("--no-verify-ssl", is_flag=True, help="Disable SSL verification.")
+def probe(
+    target: str,
+    depth: str,
+    query_field: str,
+    response_field: str | None,
+    output: str | None,
+    timeout: float,
+    no_verify_ssl: bool,
+) -> None:
+    """R2: Probe RAG pipeline internals.
 
-    Techniques: RD-0201 through RD-0205. [Not yet implemented]
+    Maps chunk boundaries, retrieval parameters, and knowledge base scope.
+    Techniques: RD-0201 (Chunk Boundary Detection). More in --depth full.
     """
-    click.echo(click.style("[*] ", fg="cyan") + f"Probing {target} (depth: {depth})")
-    click.echo(click.style("[!] ", fg="yellow") + "R2 probe module not yet implemented.")
+    from ragdrag.core.probe import run_probe
+    from ragdrag.reporters.json_report import format_summary, generate_report
+    from ragdrag.utils.http_client import build_client
+
+    _validate_url(target)
+    client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
+    try:
+        click.echo(click.style("[*] ", fg="cyan") + f"Probing {target} (depth: {depth})")
+        click.echo(click.style("[*] ", fg="cyan") + f"Query field: {query_field}")
+        click.echo("")
+
+        result = run_probe(
+            target=target,
+            client=client,
+            depth=depth,
+            query_field=query_field,
+            response_field=response_field,
+        )
+
+        report = generate_report(result, output_path=output)
+        click.echo(format_summary(report))
+
+        if output:
+            click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
+
+    except httpx.ConnectError:
+        click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    except httpx.TimeoutException:
+        click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
+        sys.exit(1)
+    finally:
+        client.close()
 
 
 @cli.command()
@@ -202,36 +247,67 @@ def exfiltrate(
 def scan(target: str, phases: str, output: str | None) -> None:
     """Run multiple kill chain phases against a target.
 
-    Executes selected phases in sequence. Currently only R1 is implemented.
+    Executes selected phases in sequence: R1 (Fingerprint), R2 (Probe), R3 (Exfiltrate).
     """
+    from ragdrag.reporters.json_report import format_summary, generate_report
+    from ragdrag.utils.http_client import build_client
+
     _validate_url(target)
     phase_list = [p.strip().upper() for p in phases.split(",")]
     click.echo(click.style("[*] ", fg="cyan") + f"Scanning {target}")
     click.echo(click.style("[*] ", fg="cyan") + f"Phases: {', '.join(phase_list)}")
     click.echo("")
 
-    if "R1" in phase_list:
-        from ragdrag.core.fingerprint import run_full_fingerprint
-        from ragdrag.reporters.json_report import format_summary, generate_report
-        from ragdrag.utils.http_client import build_client
+    client = build_client()
+    implemented = {"R1", "R2", "R3"}
 
-        client = build_client()
-        try:
+    try:
+        if "R1" in phase_list:
+            from ragdrag.core.fingerprint import run_full_fingerprint
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R1: Fingerprint")
             result = run_full_fingerprint(target=target, client=client)
-            report = generate_report(result, output_path=output)
+            report = generate_report(result)
             click.echo(format_summary(report))
-        except httpx.ConnectError:
-            click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
-            sys.exit(1)
-        except httpx.TimeoutException:
-            click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
-            sys.exit(1)
-        finally:
-            client.close()
 
-    for phase in phase_list:
-        if phase != "R1":
-            click.echo(click.style("[!] ", fg="yellow") + f"Phase {phase} not yet implemented.")
+        if "R2" in phase_list:
+            from ragdrag.core.probe import run_probe
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R2: Probe (full depth)")
+            result = run_probe(target=target, client=client, depth="full")
+            report = generate_report(result)
+            click.echo(format_summary(report))
+
+        if "R3" in phase_list:
+            from ragdrag.core.exfiltrate import run_exfiltrate
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R3: Exfiltrate (deep)")
+            result = run_exfiltrate(target=target, client=client, deep=True)
+            # Exfiltrate has its own display format
+            click.echo(f"Target:          {result.target}")
+            click.echo(f"Total queries:   {result.total_queries}")
+            click.echo(f"Findings:        {len(result.findings)}")
+            click.echo(f"Guardrail found: {result.guardrail_detected}")
+            click.echo(f"Bypass findings: {len(result.guardrail_bypass_findings)}")
+            click.echo("")
+            for f in result.findings + result.guardrail_bypass_findings:
+                conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
+                click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.sensitivity}")
+                click.echo(f"    {f.detail}")
+                click.echo("")
+
+        for phase in phase_list:
+            if phase not in implemented:
+                click.echo(click.style("[!] ", fg="yellow") + f"Phase {phase} not yet implemented.")
+
+        if output:
+            click.echo(click.style("[+] ", fg="green") + f"Full scan report not yet supported for multi-phase. Use individual commands with -o.")
+
+    except httpx.ConnectError:
+        click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    except httpx.TimeoutException:
+        click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
+        sys.exit(1)
+    finally:
+        client.close()
 
 
 @cli.command()
