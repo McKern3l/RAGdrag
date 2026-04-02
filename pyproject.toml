@@ -47,4 +47,5 @@ include = ["ragdrag*"]
 [tool.setuptools.package-data]
 ragdrag = ["payloads/**/*.json"]
 
-# Tests live in the ragdrag-labs repo: github.com/McKern3l/RAGdrag-labs
+[tool.pytest.ini_options]
+testpaths = ["tests"]

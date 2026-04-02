@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.5.0 - Full Kill Chain (2026-04-01)
+
+### Added
+- **R4 Poison phase** with 4 techniques:
+  - RD-0401: Document Injection (ingestion endpoint discovery, injection, verification)
+  - RD-0402: Embedding Dominance (test if injected docs dominate retrieval)
+  - RD-0403: Credential Trap (inject docs directing users to attacker infrastructure)
+  - RD-0404: Instruction Injection via Retrieval (inject directives that influence LLM behavior)
+- **R5 Hijack phase** with 4 techniques:
+  - RD-0501: Retrieval Redirection (replace expected responses with attacker content)
+  - RD-0502: Context Window Saturation (flood context with attacker documents)
+  - RD-0503: Agent Tool Manipulation (inject docs that trigger tool calls)
+  - RD-0504: Persistent Backdoor via RAG (verify persistence across query types)
+- **R6 Evade phase** with 4 techniques:
+  - RD-0601: Semantic Substitution (3 strategies: academic, business, indirect)
+  - RD-0602: Retrieval Camouflage (wrap payloads in organizational content)
+  - RD-0603: Query Pattern Obfuscation (noise interleaving)
+  - RD-0604: Multi-Turn Context Building (progressive disclosure, role assumption)
+- CLI commands: `ragdrag poison`, `ragdrag hijack`, `ragdrag evade`
+- `ragdrag scan` now chains all 6 phases (R1-R6) with JSON output
+- Cross-phase composition: Hijack imports from Poison + Evade
+- pytest testpaths configuration
+
+### Changed
+- Renamed `test_*` functions in source modules to `assess_*` to prevent pytest collection conflicts
+- `ragdrag scan` default phases expanded from R1,R2,R3 to R1,R2,R3,R4,R5,R6
+
 ## v0.2.0 - R2 Probe (2026-04-01)
 
 ### Added

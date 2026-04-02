@@ -241,13 +241,145 @@ def exfiltrate(
 
 @cli.command()
 @click.option("--target", "-t", required=True, help="Target RAG endpoint URL.")
-@click.option("--phases", "-p", default="R1,R2,R3",
-              help="Comma-separated phases to run (e.g. R1,R2,R3).")
+@click.option("--listener", "-l", default=None, help="Listener host for credential traps.")
+@click.option("--ingest-url", default=None, help="Override ingestion endpoint URL.")
+@click.option("--api-key", default=None, help="API key for authenticated ingestion.")
+@click.option("--query-field", default="query", help="JSON field name for queries.")
+@click.option("--response-field", default=None, help="JSON field to read responses from.")
+@click.option("--output", "-o", default=None, help="Output file path for JSON report.")
+@click.option("--timeout", default=30.0, help="HTTP request timeout in seconds.")
+@click.option("--no-verify-ssl", is_flag=True, help="Disable SSL verification.")
+def poison(target, listener, ingest_url, api_key, query_field, response_field, output, timeout, no_verify_ssl):
+    """R4: Inject attacker-controlled content into the knowledge base."""
+    from ragdrag.core.poison import run_poison
+    from ragdrag.utils.http_client import build_client
+
+    _validate_url(target)
+    client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
+    try:
+        click.echo(click.style("[*] ", fg="cyan") + f"Poisoning {target}")
+        result = run_poison(
+            target=target, client=client, listener_host=listener,
+            ingest_url=ingest_url, api_key=api_key,
+            query_field=query_field, response_field=response_field,
+        )
+        click.echo(f"Injected:    {len(result.injected_documents)}")
+        click.echo(f"Dominance:   {result.dominance_score}")
+        click.echo(f"Trap active: {result.trap_active}")
+        click.echo(f"Findings:    {len(result.findings)}")
+        click.echo("")
+        for f in result.findings:
+            conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
+            click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.detail[:100]}")
+        if output:
+            from pathlib import Path
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(json.dumps(result.to_dict(), indent=2) + "\n")
+            click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
+    except httpx.ConnectError:
+        click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+@cli.command()
+@click.option("--target", "-t", required=True, help="Target RAG endpoint URL.")
+@click.option("--callback", "-c", default=None, help="Callback URL for tool manipulation.")
+@click.option("--ingest-url", default=None, help="Override ingestion endpoint URL.")
+@click.option("--api-key", default=None, help="API key for authenticated ingestion.")
+@click.option("--camouflage", is_flag=True, help="Wrap injected docs in R6 camouflage.")
+@click.option("--query-field", default="query", help="JSON field name for queries.")
+@click.option("--response-field", default=None, help="JSON field to read responses from.")
+@click.option("--output", "-o", default=None, help="Output file path for JSON report.")
+@click.option("--timeout", default=30.0, help="HTTP request timeout in seconds.")
+@click.option("--no-verify-ssl", is_flag=True, help="Disable SSL verification.")
+def hijack(target, callback, ingest_url, api_key, camouflage, query_field, response_field, output, timeout, no_verify_ssl):
+    """R5: Take control of RAG pipeline retrieval and generation."""
+    from ragdrag.core.hijack import run_hijack
+    from ragdrag.utils.http_client import build_client
+
+    _validate_url(target)
+    client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
+    try:
+        click.echo(click.style("[*] ", fg="cyan") + f"Hijacking {target}")
+        result = run_hijack(
+            target=target, client=client, callback_url=callback,
+            ingest_url=ingest_url, api_key=api_key,
+            query_field=query_field, response_field=response_field,
+            use_camouflage=camouflage,
+        )
+        click.echo(f"Redirected:  {result.redirected_queries}")
+        click.echo(f"Saturation:  {result.context_saturation_pct}")
+        click.echo(f"Tool calls:  {result.tool_calls_triggered}")
+        click.echo(f"Persistent:  {result.persistence_verified}")
+        click.echo(f"Findings:    {len(result.findings)}")
+        click.echo("")
+        for f in result.findings:
+            conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
+            click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.detail[:100]}")
+        if output:
+            from pathlib import Path
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(json.dumps(result.to_dict(), indent=2) + "\n")
+            click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
+    except httpx.ConnectError:
+        click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+@cli.command()
+@click.option("--target", "-t", required=True, help="Target RAG endpoint URL.")
+@click.option("--query-field", default="query", help="JSON field name for queries.")
+@click.option("--response-field", default=None, help="JSON field to read responses from.")
+@click.option("--output", "-o", default=None, help="Output file path for JSON report.")
+@click.option("--timeout", default=30.0, help="HTTP request timeout in seconds.")
+@click.option("--no-verify-ssl", is_flag=True, help="Disable SSL verification.")
+def evade(target, query_field, response_field, output, timeout, no_verify_ssl):
+    """R6: Test evasion techniques against guardrails and monitoring."""
+    from ragdrag.core.evade import run_evade
+    from ragdrag.utils.http_client import build_client
+
+    _validate_url(target)
+    client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
+    try:
+        click.echo(click.style("[*] ", fg="cyan") + f"Testing evasion against {target}")
+        result = run_evade(
+            target=target, client=client,
+            query_field=query_field, response_field=response_field,
+        )
+        click.echo(f"Substitutions tested:  {result.substitutions_tested}")
+        click.echo(f"Substitutions bypassed: {result.substitutions_bypassed}")
+        click.echo(f"Obfuscation effective: {result.obfuscation_effective}")
+        click.echo(f"Findings:              {len(result.findings)}")
+        click.echo("")
+        for f in result.findings:
+            conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
+            click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.detail[:100]}")
+        if output:
+            from pathlib import Path
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(json.dumps(result.to_dict(), indent=2) + "\n")
+            click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
+    except httpx.ConnectError:
+        click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    finally:
+        client.close()
+
+
+@cli.command()
+@click.option("--target", "-t", required=True, help="Target RAG endpoint URL.")
+@click.option("--phases", "-p", default="R1,R2,R3,R4,R5,R6",
+              help="Comma-separated phases (R1-R6). Default: full kill chain.")
 @click.option("--output", "-o", default=None, help="Output file path for JSON report.")
 def scan(target: str, phases: str, output: str | None) -> None:
-    """Run multiple kill chain phases against a target.
+    """Run the full RAGdrag kill chain against a target.
 
-    Executes selected phases in sequence: R1 (Fingerprint), R2 (Probe), R3 (Exfiltrate).
+    Phases: R1 (Fingerprint), R2 (Probe), R3 (Exfiltrate),
+    R4 (Poison), R5 (Hijack), R6 (Evade).
     """
     from ragdrag.reporters.json_report import format_summary, generate_report
     from ragdrag.utils.http_client import build_client
@@ -259,46 +391,70 @@ def scan(target: str, phases: str, output: str | None) -> None:
     click.echo("")
 
     client = build_client()
-    implemented = {"R1", "R2", "R3"}
+    all_findings = []
 
     try:
         if "R1" in phase_list:
             from ragdrag.core.fingerprint import run_full_fingerprint
             click.echo(click.style("[*] ", fg="cyan") + "Phase R1: Fingerprint")
-            result = run_full_fingerprint(target=target, client=client)
-            report = generate_report(result)
+            r = run_full_fingerprint(target=target, client=client)
+            report = generate_report(r)
             click.echo(format_summary(report))
+            all_findings.extend(r.findings)
 
         if "R2" in phase_list:
             from ragdrag.core.probe import run_probe
             click.echo(click.style("[*] ", fg="cyan") + "Phase R2: Probe (full depth)")
-            result = run_probe(target=target, client=client, depth="full")
-            report = generate_report(result)
+            r = run_probe(target=target, client=client, depth="full")
+            report = generate_report(r)
             click.echo(format_summary(report))
+            all_findings.extend(r.findings)
 
         if "R3" in phase_list:
             from ragdrag.core.exfiltrate import run_exfiltrate
             click.echo(click.style("[*] ", fg="cyan") + "Phase R3: Exfiltrate (deep)")
-            result = run_exfiltrate(target=target, client=client, deep=True)
-            # Exfiltrate has its own display format
-            click.echo(f"Target:          {result.target}")
-            click.echo(f"Total queries:   {result.total_queries}")
-            click.echo(f"Findings:        {len(result.findings)}")
-            click.echo(f"Guardrail found: {result.guardrail_detected}")
-            click.echo(f"Bypass findings: {len(result.guardrail_bypass_findings)}")
-            click.echo("")
-            for f in result.findings + result.guardrail_bypass_findings:
-                conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
-                click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.sensitivity}")
-                click.echo(f"    {f.detail}")
-                click.echo("")
+            r = run_exfiltrate(target=target, client=client, deep=True)
+            click.echo(f"  Findings: {len(r.findings)}, Guardrail: {r.guardrail_detected}")
+            all_findings.extend(r.findings + r.guardrail_bypass_findings)
 
-        for phase in phase_list:
-            if phase not in implemented:
-                click.echo(click.style("[!] ", fg="yellow") + f"Phase {phase} not yet implemented.")
+        if "R4" in phase_list:
+            from ragdrag.core.poison import run_poison
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R4: Poison")
+            r = run_poison(target=target, client=client)
+            click.echo(f"  Injected: {len(r.injected_documents)}, Trap: {r.trap_active}")
+            all_findings.extend(r.findings)
+
+        if "R5" in phase_list:
+            from ragdrag.core.hijack import run_hijack
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R5: Hijack")
+            r = run_hijack(target=target, client=client)
+            click.echo(f"  Redirected: {r.redirected_queries}, Saturation: {r.context_saturation_pct}")
+            all_findings.extend(r.findings)
+
+        if "R6" in phase_list:
+            from ragdrag.core.evade import run_evade
+            click.echo(click.style("[*] ", fg="cyan") + "Phase R6: Evade")
+            r = run_evade(target=target, client=client)
+            click.echo(f"  Bypassed: {r.substitutions_bypassed}, Obfuscation: {r.obfuscation_effective}")
+            all_findings.extend(r.findings)
+
+        # Summary
+        click.echo("")
+        click.echo(click.style(f"[+] Scan complete: {len(all_findings)} findings across {len(phase_list)} phases", fg="green"))
+        for f in all_findings:
+            conf_color = {"high": "red", "medium": "yellow", "low": "white"}.get(f.confidence, "white")
+            click.echo(click.style(f"  [{f.confidence.upper()}] ", fg=conf_color) + f"{f.technique_id}: {f.detail[:80]}")
 
         if output:
-            click.echo(click.style("[+] ", fg="green") + f"Full scan report not yet supported for multi-phase. Use individual commands with -o.")
+            from pathlib import Path
+            scan_result = {"target": target, "phases": phase_list, "findings": [
+                {"technique_id": f.technique_id, "technique_name": f.technique_name,
+                 "confidence": f.confidence, "detail": f.detail, "evidence": f.evidence}
+                for f in all_findings
+            ]}
+            Path(output).parent.mkdir(parents=True, exist_ok=True)
+            Path(output).write_text(json.dumps(scan_result, indent=2) + "\n")
+            click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
 
     except httpx.ConnectError:
         click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
