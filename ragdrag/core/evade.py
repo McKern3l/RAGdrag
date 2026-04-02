@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import random
 import re
+import sys
 from dataclasses import dataclass, field
 
 import httpx
@@ -173,7 +174,8 @@ def assess_substitution_bypass(
                 direct_resp.text if response_field is None
                 else str(direct_resp.json().get(response_field, ""))
             )
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0601 semantic substitution (direct query): {e}", file=sys.stderr)
             continue
 
         direct_blocked = any(
@@ -193,7 +195,8 @@ def assess_substitution_bypass(
                     sub_resp.text if response_field is None
                     else str(sub_resp.json().get(response_field, ""))
                 )
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0601 semantic substitution ({strategy}): {e}", file=sys.stderr)
                 continue
 
             sub_blocked = any(
@@ -342,8 +345,8 @@ def assess_camouflage_effectiveness(
                     "doc_id": camo_doc.doc_id,
                 },
             ))
-        except httpx.HTTPError:
-            pass
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0602 retrieval camouflage: {e}", file=sys.stderr)
 
     return findings
 
@@ -409,7 +412,8 @@ def assess_obfuscation_effectiveness(
             resp = client.post(target, json={query_field: q})
             if resp.status_code in (429, 403):
                 baseline_blocked += 1
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0603 obfuscation baseline: {e}", file=sys.stderr)
             continue
 
     # Then send obfuscated sequence
@@ -420,7 +424,8 @@ def assess_obfuscation_effectiveness(
             resp = client.post(target, json={query_field: q})
             if resp.status_code in (429, 403):
                 obfuscated_blocked += 1
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0603 obfuscated query: {e}", file=sys.stderr)
             continue
 
     if baseline_blocked > obfuscated_blocked:
@@ -540,7 +545,8 @@ def build_context_sequence(
                 "text": text[:500],
                 "has_sensitive": has_sensitive,
             })
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0604 multi-turn step {i + 1}: {e}", file=sys.stderr)
             continue
 
     if responses:

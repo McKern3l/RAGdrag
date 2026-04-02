@@ -13,6 +13,7 @@ RD-0302 (semantic substitution to bypass output guardrails).
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 
 import httpx
@@ -163,7 +164,8 @@ def extract_knowledge(
         try:
             resp = client.post(target, json={query_field: query})
             text = _extract_response_text(resp, response_field)
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0301 extraction query: {e}", file=sys.stderr)
             continue
 
         query_findings = scan_response_for_credentials(text, query)
@@ -428,7 +430,8 @@ def _send_query(
     try:
         resp = client.post(target, json={query_field: query})
         return _extract_response_text(resp, response_field)
-    except httpx.HTTPError:
+    except httpx.HTTPError as e:
+        print(f"[!] Query failed: {e}", file=sys.stderr)
         return ""
 
 

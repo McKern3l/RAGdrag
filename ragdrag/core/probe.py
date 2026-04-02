@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 
 import httpx
@@ -119,7 +120,8 @@ def detect_chunk_boundaries(
                 "has_boundary_indicators": _check_boundary_indicators(text),
                 "text": text[:500],
             })
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0201 chunk boundary probe: {e}", file=sys.stderr)
             continue
 
     if len(responses) < 2:
@@ -393,7 +395,8 @@ def map_similarity_threshold(
                 "has_no_match": has_no_match,
                 "text_preview": text[:200],
             })
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0202 threshold probe: {e}", file=sys.stderr)
             continue
 
     if len(probe_results) < 3:
@@ -546,7 +549,8 @@ def estimate_retrieval_count(
             full_body = resp.text if resp.status_code == 200 else ""
             source_count, _ = _parse_retrieval_data(full_body)
             counts.append({"query": query[:60], "source_count": source_count})
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0203 retrieval count: {e}", file=sys.stderr)
             continue
 
     if not counts:
@@ -653,7 +657,8 @@ def map_kb_scope(
                 )
                 if has_content:
                     hit_count += 1
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0204 KB scope ({category}): {e}", file=sys.stderr)
                 continue
 
         coverage = hit_count / total if total > 0 else 0
@@ -861,7 +866,8 @@ def fingerprint_embedding_model(
                 if scores:
                     total_relevance += max(scores)
                 tested += 1
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0205 embedding fingerprint ({domain}): {e}", file=sys.stderr)
                 continue
 
         if tested > 0:
@@ -887,7 +893,8 @@ def fingerprint_embedding_model(
                 "source_count": source_count,
                 "response_length": len(text),
             })
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0205 edge case probe: {e}", file=sys.stderr)
             continue
 
     if not domain_results:

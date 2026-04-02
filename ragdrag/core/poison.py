@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import uuid
 from dataclasses import dataclass, field
 
@@ -142,7 +143,8 @@ def _discover_ingestion_endpoint(
                 # 400/422 = endpoint exists but bad request format
                 # 401/403 = endpoint exists but needs auth
                 return url
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] Ingest endpoint probe {url}: {e}", file=sys.stderr)
             continue
     return None
 
@@ -356,7 +358,8 @@ def assess_embedding_dominance(
             if content_marker in text.lower():
                 match_count += 1
             total_queries += 1
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0402 embedding dominance check: {e}", file=sys.stderr)
             continue
 
     if total_queries == 0:
@@ -466,8 +469,8 @@ def deploy_credential_trap(
                                 "url_in_response": True,
                             },
                         ))
-                except httpx.HTTPError:
-                    pass
+                except httpx.HTTPError as e:
+                    print(f"[!] RD-0403 credential trap verification: {e}", file=sys.stderr)
 
     return findings
 
@@ -544,8 +547,8 @@ def inject_instructions(
                         "doc_id": doc.doc_id,
                     },
                 ))
-            except httpx.HTTPError:
-                pass
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0404 instruction injection: {e}", file=sys.stderr)
 
     return findings
 

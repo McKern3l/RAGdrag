@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 
 import httpx
@@ -131,7 +132,8 @@ def redirect_retrieval(
                 marker = redir["redirect_content"][:50].lower()
                 if marker in text.lower():
                     redirected += 1
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0501 retrieval redirection check: {e}", file=sys.stderr)
                 continue
 
         total = len(redir["verification_queries"])
@@ -234,8 +236,8 @@ def saturate_context_window(
                 "camouflaged": use_camouflage,
             },
         ))
-    except httpx.HTTPError:
-        pass
+    except httpx.HTTPError as e:
+        print(f"[!] RD-0502 context saturation: {e}", file=sys.stderr)
 
     return findings
 
@@ -321,7 +323,8 @@ def manipulate_tool_calls(
                     "doc_id": doc.doc_id,
                 },
             ))
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0503 tool manipulation: {e}", file=sys.stderr)
             continue
 
     return findings
@@ -367,7 +370,8 @@ def assess_persistence(
                 if content_marker in text.lower():
                     found = True
                     break
-            except httpx.HTTPError:
+            except httpx.HTTPError as e:
+                print(f"[!] RD-0504 persistence check: {e}", file=sys.stderr)
                 continue
 
         persistence_results.append({

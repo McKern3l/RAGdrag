@@ -15,6 +15,7 @@ This module implements RD-0101 and RD-0102 with operational functionality.
 from __future__ import annotations
 
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 
@@ -223,7 +224,8 @@ def _time_queries(
                 status_code=resp.status_code,
                 response_text=str(response_text),
             ))
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0101 timing probe: {e}", file=sys.stderr)
             elapsed = measure_elapsed(start)
             stats.add(TimingResult(
                 url=target,
@@ -392,7 +394,8 @@ def _probe_error_messages(
                 for pattern in patterns:
                     if re.search(pattern, combined, re.IGNORECASE):
                         db_hits.setdefault(db_name, []).append(pattern)
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0102 vector DB fingerprint: {e}", file=sys.stderr)
             continue
 
     for db_name, matched_patterns in db_hits.items():
@@ -528,7 +531,8 @@ def detect_knowledge_freshness(
                         },
                     ))
                     break
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            print(f"[!] RD-0101 knowledge freshness probe: {e}", file=sys.stderr)
             continue
 
     return findings
