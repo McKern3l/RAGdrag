@@ -51,9 +51,29 @@ That's it. No setup beyond `pip install`. Point it at a target and go.
 
 ### Test Lab (Optional)
 
-A vulnerable RAG test target and sample results are available in a separate repo for anyone who wants to validate the tool or follow along with the walkthrough:
+A vulnerable RAG test target and exercises are available in a separate repo for anyone who wants to validate the tool or follow along with the walkthrough:
 
-**[McKern3l/RAGdrag-labs](https://github.com/McKern3l/RAGdrag-labs)** — test target, dogfood results, and test suite
+**[McKern3l/RAGdrag-labs](https://github.com/McKern3l/RAGdrag-labs)** — intentionally vulnerable lab servers and test suite
+
+The lab servers require [Ollama](https://ollama.com/) with any model pulled. Default is `llama3.2`, configurable via environment variable:
+
+```bash
+# Pull the default model
+ollama pull llama3.2
+
+# Start the open (no guardrails) lab server
+cd RAGdrag-labs
+pip install -e .
+python targets/rag_server.py
+
+# Use a different model
+OLLAMA_MODEL=mistral python targets/rag_server.py
+
+# Then run RAGdrag against it
+ragdrag scan -t http://localhost:8899/chat
+```
+
+See the [RAGdrag-labs README](https://github.com/McKern3l/RAGdrag-labs) for all configuration options.
 
 ## Commands
 
@@ -64,7 +84,7 @@ A vulnerable RAG test target and sample results are available in a separate repo
 | `exfiltrate` | R3: Extract knowledge base contents and credentials |
 | `scan` | Run multiple kill chain phases against a target |
 | `listen` | Start a credential capture HTTP listener for RD-0304/RD-0403 |
-| `report` | Generate JSON, Markdown, or ATLAS-formatted reports from findings |
+| `report` | Generate JSON reports from findings |
 
 ## The RAGdrag Kill Chain
 
