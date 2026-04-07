@@ -16,3 +16,4 @@ env/
 *.swo
 findings/
 *.findings.json
+docs/specs/
