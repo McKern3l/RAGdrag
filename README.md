@@ -3,7 +3,7 @@
 <p align="center">
 <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
 <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License: MIT"></a>
-<a href="#"><img src="https://img.shields.io/badge/version-0.1.0--alpha-orange.svg" alt="Version"></a>
+<a href="#"><img src="https://img.shields.io/badge/version-0.5.0-orange.svg" alt="Version"></a>
 </p>
 
 <p align="center">

@@ -279,6 +279,9 @@ def poison(target, listener, ingest_url, api_key, query_field, response_field, o
     except httpx.ConnectError:
         click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
         sys.exit(1)
+    except httpx.TimeoutException:
+        click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
+        sys.exit(1)
     finally:
         client.close()
 
@@ -326,6 +329,9 @@ def hijack(target, callback, ingest_url, api_key, camouflage, query_field, respo
     except httpx.ConnectError:
         click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
         sys.exit(1)
+    except httpx.TimeoutException:
+        click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
+        sys.exit(1)
     finally:
         client.close()
 
@@ -365,6 +371,9 @@ def evade(target, query_field, response_field, output, timeout, no_verify_ssl):
             click.echo(click.style("[+] ", fg="green") + f"Report written to {output}")
     except httpx.ConnectError:
         click.echo(click.style("[-] ", fg="red") + f"Connection refused: {target}")
+        sys.exit(1)
+    except httpx.TimeoutException:
+        click.echo(click.style("[-] ", fg="red") + f"Connection timed out: {target}")
         sys.exit(1)
     finally:
         client.close()
@@ -469,7 +478,7 @@ def scan(target: str, phases: str, output: str | None) -> None:
 @cli.command()
 @click.option("--input", "-i", "input_file", required=True,
               help="Input findings JSON file.")
-@click.option("--format", "-f", "fmt", type=click.Choice(["json", "markdown", "atlas"]),
+@click.option("--format", "-f", "fmt", type=click.Choice(["json"]),
               default="json", help="Output format.")
 @click.option("--output", "-o", default=None, help="Output file path.")
 def report(input_file: str, fmt: str, output: str | None) -> None:
@@ -477,17 +486,7 @@ def report(input_file: str, fmt: str, output: str | None) -> None:
     from pathlib import Path
 
     data = json.loads(Path(input_file).read_text())
-
-    if fmt == "json":
-        out = json.dumps(data, indent=2)
-    elif fmt == "markdown":
-        click.echo(click.style("[!] ", fg="yellow") + "Markdown report format not yet implemented.")
-        return
-    elif fmt == "atlas":
-        click.echo(click.style("[!] ", fg="yellow") + "ATLAS report format not yet implemented.")
-        return
-    else:
-        out = json.dumps(data, indent=2)
+    out = json.dumps(data, indent=2)
 
     if output:
         Path(output).write_text(out + "\n")

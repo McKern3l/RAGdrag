@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import httpx
 
+from ragdrag import __version__
+
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_HEADERS = {
-    "User-Agent": "ragdrag/0.1.0",
+    "User-Agent": f"ragdrag/{__version__}",
 }
 
 
