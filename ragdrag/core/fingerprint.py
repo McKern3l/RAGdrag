@@ -14,12 +14,15 @@ This module implements RD-0101 and RD-0102 with operational functionality.
 
 from __future__ import annotations
 
+import json
+import logging
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from ragdrag.core.models import Finding
 from ragdrag.utils.timing import TimingResult, TimingStats, measure_elapsed
@@ -212,8 +215,9 @@ def _time_queries(
             response_text = ""
             if response_field and resp.status_code == 200:
                 try:
-                    response_text = resp.json().get(response_field, "")
-                except Exception:
+                    data = resp.json()
+                    response_text = data.get(response_field, "") if isinstance(data, dict) else resp.text
+                except (json.JSONDecodeError, TypeError, ValueError):
                     response_text = resp.text
             else:
                 response_text = resp.text
@@ -225,7 +229,7 @@ def _time_queries(
                 response_text=str(response_text),
             ))
         except httpx.HTTPError as e:
-            print(f"[!] RD-0101 timing probe: {e}", file=sys.stderr)
+            logger.warning("RD-0101 timing probe failed: %s", e)
             elapsed = measure_elapsed(start)
             stats.add(TimingResult(
                 url=target,
@@ -240,7 +244,7 @@ def _time_queries(
 def _detect_citation_patterns(responses: list[str]) -> list[str]:
     """Scan responses for citation patterns indicating RAG retrieval."""
     hits: list[str] = []
-    combined = " ".join(responses).lower()
+    combined = " ".join(responses)
     for pattern in CITATION_PATTERNS:
         if re.search(pattern, combined, re.IGNORECASE):
             hits.append(pattern)
@@ -250,9 +254,8 @@ def _detect_citation_patterns(responses: list[str]) -> list[str]:
 def _detect_retrieval_failures(text: str) -> list[str]:
     """Scan text for retrieval failure messages."""
     hits: list[str] = []
-    lower = text.lower()
     for pattern in RETRIEVAL_FAILURE_PATTERNS:
-        if re.search(pattern, lower, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             hits.append(pattern)
     return hits
 
@@ -379,23 +382,18 @@ def _probe_error_messages(
 
     for probe in ERROR_PROBES:
         try:
-            resp = client.post(
-                target,
-                json={query_field: probe},
-                timeout=10.0,
-            )
-            text = resp.text.lower()
-            headers_str = " ".join(
-                f"{k}: {v}" for k, v in resp.headers.items()
-            ).lower()
-            combined = text + " " + headers_str
+            # Timeout flows from the client builder so --timeout flag is respected.
+            resp = client.post(target, json={query_field: probe})
+            # re.IGNORECASE handles case folding; no need to .lower() large response bodies.
+            headers_str = " ".join(f"{k}: {v}" for k, v in resp.headers.items())
+            combined = resp.text + " " + headers_str
 
             for db_name, patterns in ERROR_SIGNATURES.items():
                 for pattern in patterns:
                     if re.search(pattern, combined, re.IGNORECASE):
                         db_hits.setdefault(db_name, []).append(pattern)
         except httpx.HTTPError as e:
-            print(f"[!] RD-0102 vector DB fingerprint: {e}", file=sys.stderr)
+            logger.warning("RD-0102 vector DB fingerprint failed: %s", e)
             continue
 
     for db_name, matched_patterns in db_hits.items():
@@ -441,13 +439,16 @@ def _scan_endpoints(
 
             url = f"{scheme}://{base_host}:{port}{ep['path']}"
             try:
-                resp = client.get(url, timeout=5.0)
+                # Port scans SHOULD fail fast so a slow host doesn't stall the whole
+                # sweep; but we cap it at min(user_timeout, 5s) instead of overriding.
+                scan_timeout = min(client.timeout.connect or 5.0, 5.0) if client.timeout else 5.0
+                resp = client.get(url, timeout=scan_timeout)
                 if resp.status_code < 500:
                     ep_type = ep["type"]
                     confidence = "high" if ep_type == "admin_panel" else "medium"
                     findings.append(Finding(
                         technique_id="RD-0102",
-                        technique_name=f"Vector DB Fingerprinting (Endpoint Scan)",
+                        technique_name="Vector DB Fingerprinting (Endpoint Scan)",
                         confidence=confidence,
                         detail=(
                             f"Accessible {ep['db']} {ep_type} endpoint: {url} "
@@ -509,8 +510,9 @@ def detect_knowledge_freshness(
             text = ""
             if response_field and resp.status_code == 200:
                 try:
-                    text = str(resp.json().get(response_field, ""))
-                except Exception:
+                    data = resp.json()
+                    text = str(data.get(response_field, "")) if isinstance(data, dict) else resp.text
+                except (json.JSONDecodeError, TypeError, ValueError):
                     text = resp.text
             else:
                 text = resp.text
@@ -532,7 +534,7 @@ def detect_knowledge_freshness(
                     ))
                     break
         except httpx.HTTPError as e:
-            print(f"[!] RD-0101 knowledge freshness probe: {e}", file=sys.stderr)
+            logger.warning("RD-0101 knowledge freshness probe failed: %s", e)
             continue
 
     return findings

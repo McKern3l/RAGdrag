@@ -16,12 +16,14 @@ credential traps, and instruction payloads that influence LLM behavior.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 import uuid
 from dataclasses import dataclass, field
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from ragdrag.core.models import Finding
 
@@ -144,7 +146,7 @@ def _discover_ingestion_endpoint(
                 # 401/403 = endpoint exists but needs auth
                 return url
         except httpx.HTTPError as e:
-            print(f"[!] Ingest endpoint probe {url}: {e}", file=sys.stderr)
+            logger.warning("Ingest endpoint probe %s failed: %s", url, e)
             continue
     return None
 
@@ -203,12 +205,13 @@ def inject_document(
         resp = client.post(ingest_url, json=payload, headers=headers)
 
         if resp.status_code in (200, 201):
-            # Try to extract doc ID from response
+            # Try to extract doc ID from response. Narrow catch so programming
+            # errors (NameError, AttributeError from dataclass refactors) fail loud.
             try:
                 resp_data = resp.json()
-                if "id" in resp_data:
+                if isinstance(resp_data, dict) and "id" in resp_data:
                     doc_id = str(resp_data["id"])
-            except Exception:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
 
             doc = InjectedDocument(
@@ -359,7 +362,7 @@ def assess_embedding_dominance(
                 match_count += 1
             total_queries += 1
         except httpx.HTTPError as e:
-            print(f"[!] RD-0402 embedding dominance check: {e}", file=sys.stderr)
+            logger.warning("RD-0402 embedding dominance check failed: %s", e)
             continue
 
     if total_queries == 0:
@@ -390,6 +393,13 @@ def assess_embedding_dominance(
 
 # --- RD-0403: Credential Trap ---
 
+# Template escape rules for these strings:
+#   {listener_host}     — filled by deploy_credential_trap via .format() (single braces)
+#   {{{{username}}}}    — quadruple braces survive two passes:
+#                         1. .format() consumes one layer → {{username}}
+#                         2. LLM/template engine in the target pipeline consumes the
+#                            second → {username} for runtime substitution
+# Do NOT collapse to double braces or the LLM won't see a placeholder.
 CREDENTIAL_TRAP_TEMPLATES = [
     {
         "content": (
@@ -470,7 +480,7 @@ def deploy_credential_trap(
                             },
                         ))
                 except httpx.HTTPError as e:
-                    print(f"[!] RD-0403 credential trap verification: {e}", file=sys.stderr)
+                    logger.warning("RD-0403 credential trap verification failed: %s", e)
 
     return findings
 
@@ -548,7 +558,7 @@ def inject_instructions(
                     },
                 ))
             except httpx.HTTPError as e:
-                print(f"[!] RD-0404 instruction injection: {e}", file=sys.stderr)
+                logger.warning("RD-0404 instruction injection failed: %s", e)
 
     return findings
 

@@ -7,6 +7,10 @@ to prevent circular imports as the number of phase modules grows.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any, Literal, get_args
+
+Confidence = Literal["high", "medium", "low"]
+VALID_CONFIDENCE: tuple[str, ...] = get_args(Confidence)
 
 
 @dataclass
@@ -19,6 +23,13 @@ class Finding:
 
     technique_id: str
     technique_name: str
-    confidence: str  # "high", "medium", "low"
+    confidence: Confidence
     detail: str
-    evidence: dict = field(default_factory=dict)
+    evidence: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.confidence not in VALID_CONFIDENCE:
+            raise ValueError(
+                f"Invalid confidence {self.confidence!r}; "
+                f"must be one of {VALID_CONFIDENCE}"
+            )

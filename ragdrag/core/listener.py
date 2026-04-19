@@ -306,6 +306,10 @@ class _CaptureHandler(BaseHTTPRequestHandler):
         pass
 
 
+class OpenSSLUnavailable(RuntimeError):
+    """Raised when openssl is missing or fails during self-signed cert generation."""
+
+
 def generate_self_signed_cert(cert_dir: str | None = None) -> tuple[str, str]:
     """Generate a self-signed TLS certificate and key.
 
@@ -316,22 +320,38 @@ def generate_self_signed_cert(cert_dir: str | None = None) -> tuple[str, str]:
 
     Returns:
         Tuple of (cert_path, key_path).
+
+    Raises:
+        OpenSSLUnavailable: If openssl is not on PATH or cert generation fails.
     """
     if cert_dir is None:
         cert_dir = tempfile.mkdtemp(prefix="ragdrag-tls-")
     cert_path = str(Path(cert_dir) / "cert.pem")
     key_path = str(Path(cert_dir) / "key.pem")
 
-    subprocess.run(
-        [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048",
-            "-keyout", key_path, "-out", cert_path,
-            "-days", "1", "-nodes",
-            "-subj", "/CN=ragdrag-listener",
-        ],
-        capture_output=True,
-        check=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                "-keyout", key_path, "-out", cert_path,
+                "-days", "1", "-nodes",
+                "-subj", "/CN=ragdrag-listener",
+            ],
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError as e:
+        raise OpenSSLUnavailable(
+            "openssl not found on PATH. Install it (macOS: 'brew install openssl'; "
+            "Debian/Ubuntu: 'apt install openssl') or run the listener without --tls."
+        ) from e
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+        raise OpenSSLUnavailable(
+            f"openssl failed to generate self-signed cert (exit {e.returncode}). "
+            f"stderr: {stderr.strip() or '<empty>'}"
+        ) from e
+
     return cert_path, key_path
 
 

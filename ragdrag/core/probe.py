@@ -17,11 +17,13 @@ and embedding model characteristics. Pure reconnaissance, no injection.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 from dataclasses import dataclass, field
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from ragdrag.core.models import Finding
 
@@ -121,7 +123,7 @@ def detect_chunk_boundaries(
                 "text": text[:500],
             })
         except httpx.HTTPError as e:
-            print(f"[!] RD-0201 chunk boundary probe: {e}", file=sys.stderr)
+            logger.warning("RD-0201 chunk boundary probe failed: %s", e)
             continue
 
     if len(responses) < 2:
@@ -257,9 +259,8 @@ def _parse_retrieval_data(response_body: str) -> tuple[int, list[int]]:
 
 def _check_boundary_indicators(text: str) -> bool:
     """Check if response text contains chunk boundary indicators."""
-    lower = text.lower()
     for pattern in BOUNDARY_INDICATORS:
-        if re.search(pattern, lower, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             return True
     return False
 
@@ -268,8 +269,11 @@ def _extract_response_text(resp: httpx.Response, response_field: str | None) -> 
     """Extract text from an HTTP response."""
     if response_field and resp.status_code == 200:
         try:
-            return str(resp.json().get(response_field, ""))
-        except Exception:
+            data = resp.json()
+            if isinstance(data, dict):
+                return str(data.get(response_field, ""))
+            return resp.text
+        except (json.JSONDecodeError, TypeError, ValueError):
             return resp.text
     return resp.text
 
@@ -396,7 +400,7 @@ def map_similarity_threshold(
                 "text_preview": text[:200],
             })
         except httpx.HTTPError as e:
-            print(f"[!] RD-0202 threshold probe: {e}", file=sys.stderr)
+            logger.warning("RD-0202 threshold probe failed: %s", e)
             continue
 
     if len(probe_results) < 3:
@@ -507,9 +511,8 @@ def map_similarity_threshold(
 
 def _check_no_match(text: str) -> bool:
     """Check if response text indicates no relevant results were found."""
-    lower = text.lower()
     for pattern in NO_MATCH_INDICATORS:
-        if re.search(pattern, lower, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             return True
     return False
 
@@ -550,7 +553,7 @@ def estimate_retrieval_count(
             source_count, _ = _parse_retrieval_data(full_body)
             counts.append({"query": query[:60], "source_count": source_count})
         except httpx.HTTPError as e:
-            print(f"[!] RD-0203 retrieval count: {e}", file=sys.stderr)
+            logger.warning("RD-0203 retrieval count failed: %s", e)
             continue
 
     if not counts:
@@ -658,7 +661,7 @@ def map_kb_scope(
                 if has_content:
                     hit_count += 1
             except httpx.HTTPError as e:
-                print(f"[!] RD-0204 KB scope ({category}): {e}", file=sys.stderr)
+                logger.warning("RD-0204 KB scope (%s) failed: %s", category, e)
                 continue
 
         coverage = hit_count / total if total > 0 else 0
@@ -867,7 +870,7 @@ def fingerprint_embedding_model(
                     total_relevance += max(scores)
                 tested += 1
             except httpx.HTTPError as e:
-                print(f"[!] RD-0205 embedding fingerprint ({domain}): {e}", file=sys.stderr)
+                logger.warning("RD-0205 embedding fingerprint (%s) failed: %s", domain, e)
                 continue
 
         if tested > 0:
@@ -894,7 +897,7 @@ def fingerprint_embedding_model(
                 "response_length": len(text),
             })
         except httpx.HTTPError as e:
-            print(f"[!] RD-0205 edge case probe: {e}", file=sys.stderr)
+            logger.warning("RD-0205 edge case probe failed: %s", e)
             continue
 
     if not domain_results:

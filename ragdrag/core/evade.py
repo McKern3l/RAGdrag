@@ -15,14 +15,16 @@ and R5 (Hijack) to bypass guardrails and monitoring.
 
 from __future__ import annotations
 
+import logging
 import random
 import re
-import sys
 from dataclasses import dataclass, field
 
 import httpx
 
 from ragdrag.core.models import Finding
+
+logger = logging.getLogger(__name__)
 
 
 # --- Data structures ---
@@ -175,7 +177,7 @@ def assess_substitution_bypass(
                 else str(direct_resp.json().get(response_field, ""))
             )
         except httpx.HTTPError as e:
-            print(f"[!] RD-0601 semantic substitution (direct query): {e}", file=sys.stderr)
+            logger.warning("RD-0601 semantic substitution (direct query) failed: %s", e)
             continue
 
         direct_blocked = any(
@@ -196,7 +198,7 @@ def assess_substitution_bypass(
                     else str(sub_resp.json().get(response_field, ""))
                 )
             except httpx.HTTPError as e:
-                print(f"[!] RD-0601 semantic substitution ({strategy}): {e}", file=sys.stderr)
+                logger.warning("RD-0601 semantic substitution (%s) failed: %s", strategy, e)
                 continue
 
             sub_blocked = any(
@@ -346,7 +348,7 @@ def assess_camouflage_effectiveness(
                 },
             ))
         except httpx.HTTPError as e:
-            print(f"[!] RD-0602 retrieval camouflage: {e}", file=sys.stderr)
+            logger.warning("RD-0602 retrieval camouflage failed: %s", e)
 
     return findings
 
@@ -413,7 +415,7 @@ def assess_obfuscation_effectiveness(
             if resp.status_code in (429, 403):
                 baseline_blocked += 1
         except httpx.HTTPError as e:
-            print(f"[!] RD-0603 obfuscation baseline: {e}", file=sys.stderr)
+            logger.warning("RD-0603 obfuscation baseline failed: %s", e)
             continue
 
     # Then send obfuscated sequence
@@ -425,7 +427,7 @@ def assess_obfuscation_effectiveness(
             if resp.status_code in (429, 403):
                 obfuscated_blocked += 1
         except httpx.HTTPError as e:
-            print(f"[!] RD-0603 obfuscated query: {e}", file=sys.stderr)
+            logger.warning("RD-0603 obfuscated query failed: %s", e)
             continue
 
     if baseline_blocked > obfuscated_blocked:
@@ -546,7 +548,7 @@ def build_context_sequence(
                 "has_sensitive": has_sensitive,
             })
         except httpx.HTTPError as e:
-            print(f"[!] RD-0604 multi-turn step {i + 1}: {e}", file=sys.stderr)
+            logger.warning("RD-0604 multi-turn step %d failed: %s", i + 1, e)
             continue
 
     if responses:

@@ -45,7 +45,7 @@ Repository = "https://github.com/McKern3l/RAGdrag"
 include = ["ragdrag*"]
 
 [tool.setuptools.package-data]
-ragdrag = ["payloads/**/*.json"]
+ragdrag = ["payloads/**/*.json", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

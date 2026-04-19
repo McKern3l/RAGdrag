@@ -12,11 +12,14 @@ RD-0302 (semantic substitution to bypass output guardrails).
 
 from __future__ import annotations
 
+import json
+import logging
 import re
-import sys
 from dataclasses import dataclass, field
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 from ragdrag.core.models import Finding
 
@@ -165,7 +168,7 @@ def extract_knowledge(
             resp = client.post(target, json={query_field: query})
             text = _extract_response_text(resp, response_field)
         except httpx.HTTPError as e:
-            print(f"[!] RD-0301 extraction query: {e}", file=sys.stderr)
+            logger.warning("RD-0301 extraction query failed: %s", e)
             continue
 
         query_findings = scan_response_for_credentials(text, query)
@@ -248,9 +251,8 @@ INTERNAL_DOC_PATTERNS = [
 def _check_internal_doc_indicators(text: str) -> list[str]:
     """Check for indicators of internal/sensitive documentation."""
     hits: list[str] = []
-    lower = text.lower()
     for pattern in INTERNAL_DOC_PATTERNS:
-        if re.search(pattern, lower, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             hits.append(pattern)
     return hits
 
@@ -271,8 +273,11 @@ def _extract_response_text(resp: httpx.Response, response_field: str | None) -> 
     """Extract text from an HTTP response."""
     if response_field and resp.status_code == 200:
         try:
-            return str(resp.json().get(response_field, ""))
-        except Exception:
+            data = resp.json()
+            if isinstance(data, dict):
+                return str(data.get(response_field, ""))
+            return resp.text
+        except (json.JSONDecodeError, TypeError, ValueError):
             return resp.text
     return resp.text
 
@@ -412,9 +417,8 @@ def _is_response_blocked(text: str) -> bool:
     """Detect if a response was blocked by guardrails."""
     if not text:
         return True
-    lower = text.lower()
     for pattern in BLOCKED_RESPONSE_PATTERNS:
-        if re.search(pattern, lower, re.IGNORECASE):
+        if re.search(pattern, text, re.IGNORECASE):
             return True
     return False
 
@@ -431,7 +435,7 @@ def _send_query(
         resp = client.post(target, json={query_field: query})
         return _extract_response_text(resp, response_field)
     except httpx.HTTPError as e:
-        print(f"[!] Query failed: {e}", file=sys.stderr)
+        logger.warning("Query failed: %s", e)
         return ""
 
 

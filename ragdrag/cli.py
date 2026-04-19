@@ -6,7 +6,9 @@ For authorized security testing and research only.
 from __future__ import annotations
 
 import json
+import logging
 import sys
+from urllib.parse import urlparse, urlunparse
 
 import click
 import httpx
@@ -25,19 +27,36 @@ BANNER = click.style(
 
 
 def _validate_url(url: str) -> str:
-    """Basic URL validation."""
-    if not url.startswith(("http://", "https://")):
+    """Validate and normalize a target URL.
+
+    Enforces http:// or https:// scheme, requires a non-empty netloc,
+    and strips trailing slash + fragment so downstream modules see a
+    consistent canonical form.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
         raise click.BadParameter(
             f"Invalid URL: {url} (must start with http:// or https://)",
             param_hint="'--target'",
         )
-    return url
+    if not parsed.netloc:
+        raise click.BadParameter(
+            f"Invalid URL: {url} (missing host)",
+            param_hint="'--target'",
+        )
+    # Canonicalize: drop fragment, strip trailing slash on path (unless root-only)
+    path = parsed.path.rstrip("/") if parsed.path not in ("", "/") else parsed.path
+    normalized = urlunparse(
+        (parsed.scheme, parsed.netloc, path, parsed.params, parsed.query, "")
+    )
+    return normalized
 
 
 @click.group()
 @click.version_option(version=__version__, prog_name="ragdrag")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress banner output.")
-def cli(quiet: bool) -> None:
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug-level logging.")
+def cli(quiet: bool, verbose: bool) -> None:
     """ragdrag - RAG pipeline security testing toolkit.
 
     Implements the RAGdrag kill chain for assessing RAG system security.
@@ -45,6 +64,13 @@ def cli(quiet: bool) -> None:
 
     For authorized security testing and research only.
     """
+    # Preserve prior visible behavior: warnings go to stderr. --verbose surfaces debug.
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="[%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
     if not quiet:
         click.echo(BANNER)
 
@@ -75,7 +101,7 @@ def fingerprint(
     from ragdrag.reporters.json_report import format_summary, generate_report
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Fingerprinting {target}")
@@ -133,7 +159,7 @@ def probe(
     from ragdrag.reporters.json_report import format_summary, generate_report
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Probing {target} (depth: {depth})")
@@ -189,7 +215,7 @@ def exfiltrate(
     from ragdrag.core.exfiltrate import run_exfiltrate
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Exfiltrating from {target}")
@@ -254,7 +280,7 @@ def poison(target, listener, ingest_url, api_key, query_field, response_field, o
     from ragdrag.core.poison import run_poison
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Poisoning {target}")
@@ -302,7 +328,7 @@ def hijack(target, callback, ingest_url, api_key, camouflage, query_field, respo
     from ragdrag.core.hijack import run_hijack
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Hijacking {target}")
@@ -348,7 +374,7 @@ def evade(target, query_field, response_field, output, timeout, no_verify_ssl):
     from ragdrag.core.evade import run_evade
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     client = build_client(timeout=timeout, verify_ssl=not no_verify_ssl)
     try:
         click.echo(click.style("[*] ", fg="cyan") + f"Testing evasion against {target}")
@@ -393,7 +419,7 @@ def scan(target: str, phases: str, output: str | None) -> None:
     from ragdrag.reporters.json_report import format_summary, generate_report
     from ragdrag.utils.http_client import build_client
 
-    _validate_url(target)
+    target = _validate_url(target)
     phase_list = [p.strip().upper() for p in phases.split(",")]
     click.echo(click.style("[*] ", fg="cyan") + f"Scanning {target}")
     click.echo(click.style("[*] ", fg="cyan") + f"Phases: {', '.join(phase_list)}")

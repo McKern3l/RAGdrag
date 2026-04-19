@@ -15,9 +15,11 @@ Builds on R4 (Poison) for document injection and R6 (Evade) for camouflage.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 import httpx
 
@@ -133,7 +135,7 @@ def redirect_retrieval(
                 if marker in text.lower():
                     redirected += 1
             except httpx.HTTPError as e:
-                print(f"[!] RD-0501 retrieval redirection check: {e}", file=sys.stderr)
+                logger.warning("RD-0501 retrieval redirection check failed: %s", e)
                 continue
 
         total = len(redir["verification_queries"])
@@ -237,7 +239,7 @@ def saturate_context_window(
             },
         ))
     except httpx.HTTPError as e:
-        print(f"[!] RD-0502 context saturation: {e}", file=sys.stderr)
+        logger.warning("RD-0502 context saturation failed: %s", e)
 
     return findings
 
@@ -324,7 +326,7 @@ def manipulate_tool_calls(
                 },
             ))
         except httpx.HTTPError as e:
-            print(f"[!] RD-0503 tool manipulation: {e}", file=sys.stderr)
+            logger.warning("RD-0503 tool manipulation failed: %s", e)
             continue
 
     return findings
@@ -371,7 +373,7 @@ def assess_persistence(
                     found = True
                     break
             except httpx.HTTPError as e:
-                print(f"[!] RD-0504 persistence check: {e}", file=sys.stderr)
+                logger.warning("RD-0504 persistence check failed: %s", e)
                 continue
 
         persistence_results.append({

@@ -1,6 +1,8 @@
 """Tests for shared RAGdrag data structures."""
 
-from ragdrag.core.models import Finding
+import pytest
+
+from ragdrag.core.models import VALID_CONFIDENCE, Finding
 
 
 class TestFinding:
@@ -38,3 +40,13 @@ class TestFinding:
         f1 = Finding("RD-0201", "test", "high", "detail A")
         f2 = Finding("RD-0201", "test", "high", "detail B")
         assert f1 != f2
+
+    def test_rejects_invalid_confidence(self):
+        """Typos like 'hgih' or 'High' must fail at construction, not silently serialize."""
+        for bad in ("High", "HIGH", "hgih", "confidence", "critical", "", None):
+            with pytest.raises(ValueError, match="Invalid confidence"):
+                Finding("RD-0201", "test", bad, "detail")
+
+    def test_valid_confidence_tuple_matches_literal(self):
+        """VALID_CONFIDENCE must stay in lockstep with the Literal type alias."""
+        assert VALID_CONFIDENCE == ("high", "medium", "low")

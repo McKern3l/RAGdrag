@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -56,7 +57,7 @@ class TimingStats:
     def add(self, result: TimingResult) -> None:
         self.results.append(result)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "count": self.count,
             "mean_ms": round(self.mean_ms, 2),
